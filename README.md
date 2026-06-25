@@ -1,29 +1,53 @@
-# Getting Started (Windows)
+# Project Setup Guide
 
-Follow these steps to set up and run the project on Windows.
+This guide details the steps required to set up and run the application on **Windows**.
+
+---
 
 ## Prerequisites
 
-Ensure **uv** is installed on your system. 
+Before starting, ensure you have `uv` installed. If you haven't installed it yet, run the following command in your PowerShell terminal:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+---
 
 ## Installation & Setup
 
-1. Open your terminal and navigate to your project directory:
-   ```bash
-   cd path/to/your/folder
+Follow these steps in your terminal to configure the project environment:
 
-2. Sync the project dependencies:
+### 1. Navigate to the Project Directory
+Change your current directory to the folder containing the project files:
+```bash
+cd path/to/your/folder
+```
 
-   ```bash
-   uv sync
+### 2. Synchronize Dependencies
+Install the required dependencies using `uv`:
+```bash
+uv sync
+```
 
-3. Add your input Excel files to the project folder.
+### 3. Add Input Files
+Place your required **Excel input files** into the input folder.
 
-4. Execute the main script:
-    ```bash
-    uv run main.py
+### 4. Configure Environment Variables
+* Rename the file `.env.example` to `.env`.
+* Open `.env` in an editor and add your environment variables.
 
+---
 
+## Running the Application
+
+Once the setup is complete, execute the main script:
+
+```bash
+uv run main.py
+```
+
+---
 
 
 Extra
