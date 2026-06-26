@@ -4,90 +4,93 @@ from pathlib import Path
 #from config import FOLDER_PATH, COLUMNS_TO_READ
 
 
+def _parse_filename_metadata(filename: str) -> tuple[str, str, str]:
+    """Helper: Extracts code, region, and branch name from the specific file format."""
+    parts = filename.split("_", 3)
+    if len(parts) != 4:
+        raise SyntaxError(f"Wrong file name format, rename {filename}.")
+    
+    code, region, _, name = parts
+    return code, region, name[5:]
+
+def _process_single_sermsuk_file(
+    file_path: Path, 
+    sheet_name: str, 
+    extracted_date: date,
+    columns_to_read: list[int],
+    rows_to_read: int,
+    rows_to_skip: int,
+    has_header: bool
+) -> pl.DataFrame | None:
+    """Helper: Reads and cleans a single Excel file."""
+    code, region, branch_name = _parse_filename_metadata(file_path.stem)
+
+    df = pl.read_excel(
+        file_path,
+        sheet_name=sheet_name,
+        engine='calamine',
+        columns=columns_to_read,
+        read_options={"n_rows": rows_to_read, "skip_rows": rows_to_skip},
+        drop_empty_cols=False,
+        drop_empty_rows=False,
+        has_header=has_header,
+        schema_overrides= {"column_4": pl.String
+                            ,"column_5": pl.String
+                            ,"column_6": pl.String
+                            ,"column_7": pl.String
+                            ,"column_8": pl.String
+                            }
+    )
+    
+    # Clean and append metadata
+    cleaned_df = (
+        df.filter(pl.all_horizontal(pl.all().is_null()).cum_max() == False)
+          .filter(~pl.all_horizontal(pl.all().cast(pl.String).str.strip_chars() == ""))
+          .with_columns(
+              pl.lit(code).alias("branch_code"),
+              pl.lit(region).alias("region"),
+              pl.lit(branch_name).alias("sermsuk_branch_name"),
+              pl.lit(extracted_date).alias("stock_date")
+          )
+    )
+    return cleaned_df
+
 def extract_sermsuk_data(
-                         columns_to_read: list[int]
-                         ,sub_folder: Path 
-                         ,day:int | None = None
-                         ,rows_to_read: int  = 80
-                         ,rows_to_skip: int  = 5
-                         ,files: int = 50
-                         ,has_header: bool = False
-                         ) -> pl.DataFrame:
-    ''' 
-    This function gets the current day the system, finds the fsrm stock folder and loops through each file, extracting the branch details from the name of the file. It then reads the sheet corresponding to the day, takes the relevant columns such as SKU and ending stock, and cleans all the junk cells below the sheet. Finally, it joins all the data into 1 table and returns that as a dataframe.
-    '''
+    columns_to_read: list[int],
+    sub_folder: Path, 
+    day: int | None = None,
+    rows_to_read: int = 80,
+    rows_to_skip: int = 5,
+    files: int = 50,
+    has_header: bool = False
+) -> pl.DataFrame:
+    """Orchestrator: Loops through target directory and compiles the final dataframe."""
+    target_day = day if day is not None else date.today().day
+    extracted_date = date.today().replace(day=target_day)
 
-    df = []
-    if day == None:
-        extracted_date = date.today()
-        day = date.today().day
-    else:
-        extracted_date = date.today().replace(day = day)
+    if not (sub_folder.exists() and sub_folder.is_dir()):
+        raise NameError("Wrong folder name or folder not exists.")
 
-
-
-
-    if sub_folder.exists() and sub_folder.is_dir():
-        for index, file in enumerate(sub_folder.iterdir(), start=1):
-                if (not file.is_file() 
-                        or not file.name.endswith(".xlsx") 
-                        or not file.name.startswith("3")
-                        ):
-                        continue
-                
-                
-                name_only = file.stem
-                parts = name_only.split("_", 3)
-
-                if len(parts) == 4:
-                    code, region, _, name = parts
-                    name = name[5:]
-
-                else:
-                    raise SyntaxError(f"Wrong file name format, rename {name_only}.")
-
+    df_list = []
     
+    for index, file in enumerate(sub_folder.iterdir(), start=1):
+        if not file.is_file() or not file.name.endswith(".xlsx") or not file.name.startswith("3"):
+            continue
+            
+        file_df = _process_single_sermsuk_file(
+            file, str(target_day), extracted_date, columns_to_read, 
+            rows_to_read, rows_to_skip, has_header
+        )
+        
+        df_list.append(file_df)
+        print(f"Concatenated file: {file.name}, files in dir: {index}")
 
-                file_df = pl.read_excel(file,
-                                        sheet_name = str(day)
-                                        ,engine = 'calamine'
-                                        ,columns = columns_to_read
-                                        ,read_options={"n_rows": rows_to_read
-                                                    , "skip_rows": rows_to_skip}
-                                        ,drop_empty_cols = False
-                                        ,drop_empty_rows = False
-                                        ,has_header = has_header
-                                        ,schema_overrides={"column_4": pl.String
-                                                        ,"column_5": pl.String
-                                                        ,"column_6": pl.String
-                                                        ,"column_7": pl.String
-                                                        ,"column_8": pl.String
-                                                        }
-                                        )
-                
-                file_df = file_df.filter(
-                    #filter all rows after the first empty row 
-                    pl.all_horizontal(pl.all().is_null()).cum_max() == False
-                        ).filter(~pl.all_horizontal((pl.all().cast(pl.String).str.strip_chars() == ""))
-                                    ).with_columns(
-                                pl.lit(code).alias("branch_code")
-                                ,pl.lit(region).alias("region")
-                                ,pl.lit(name).alias("sermsuk_branch_name")
-                                ,pl.lit(extracted_date).alias("stock_date")
-                                                )
+    if len(df_list) != files:
+        raise SystemError(f"Expected {files} files, found {len(df_list)}. Check folder again.")
 
-                df.append(file_df)
-                print(f"Concated file: {file.name}, files in dir: {index}")
-    else:
-        raise NameError(f"Wrong folder name or folder not exists.")  
-             
-    if df and len(df) == files:
-        df = pl.concat(df, how="vertical")
-        print(f"{df.height} rows extracted")
-    else:
-        raise SystemError(f"Too many files. Check folder again.")
-    
-    return df
+    final_df = pl.concat(df_list, how="vertical")
+    print(f"{final_df.height} rows extracted")
+    return final_df
 
 
 def extract_sermsuk_TBL_mapping(file_name: Path | str) -> pl.DataFrame:

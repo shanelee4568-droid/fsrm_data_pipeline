@@ -26,8 +26,8 @@ def check_and_load_to_backup(df: pl.DataFrame, csv_file_path: Path) -> None:
     if not csv_file_path.exists():
         df.write_csv(csv_file_path, separator=",", float_precision=1)
     else:
-        existing = pl.read_csv(csv_file_path)
-        if check_duplicate_dates(existing, df):
+        existing_dates_df = pl.scan_csv(csv_file_path).select("stock_date").collect()
+        if check_duplicate_dates(existing_dates_df, df):
             print(f"Data for that date already exists, skipping.")
             return None
         else:
