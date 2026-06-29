@@ -63,7 +63,7 @@ test_cases = [
         folder_name="fsrm_stock",
         files_to_create=["3_BKK_skip_12345BranchA.xlsx"],
         files_param_count=5, # Expecting 5 files but only generating 1
-        expected_error=SystemError,
+        expected_error=ValueError,
         error_match="Expected 5 files, found 1. Check folder again." 
     )
 ]

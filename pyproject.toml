@@ -21,5 +21,8 @@ dependencies = [
 [project.scripts]
 my-app = "main:main"
 
-[pytest]
-addopts = "-p no:faulthandler"
+[tool.pytest.ini_options]
+addopts = [
+    "-p", "no:faulthandler",
+]
+
