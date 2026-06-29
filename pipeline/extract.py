@@ -13,37 +13,18 @@ def _parse_filename_metadata(filename: str) -> tuple[str, str, str]:
     code, region, _, name = parts
     return code, region, name[5:]
 
-def _process_single_sermsuk_file(
-    file_path: Path, 
-    sheet_name: str, 
-    extracted_date: date,
-    columns_to_read: list[int],
-    rows_to_read: int,
-    rows_to_skip: int,
-    has_header: bool
-) -> pl.DataFrame | None:
-    """Helper: Reads and cleans a single Excel file."""
-    code, region, branch_name = _parse_filename_metadata(file_path.stem)
-
-    df = pl.read_excel(
-        file_path,
-        sheet_name=sheet_name,
-        engine='calamine',
-        columns=columns_to_read,
-        read_options={"n_rows": rows_to_read, "skip_rows": rows_to_skip},
-        drop_empty_cols=False,
-        drop_empty_rows=False,
-        has_header=has_header,
-        schema_overrides= {"column_4": pl.String
-                            ,"column_5": pl.String
-                            ,"column_6": pl.String
-                            ,"column_7": pl.String
-                            ,"column_8": pl.String
-                            }
-    )
-    
-    # Clean and append metadata
-    cleaned_df = (
+def clean_sermsuk_dataframe(
+    df: pl.DataFrame, 
+    code: str, 
+    region: str, 
+    branch_name: str, 
+    extracted_date: date
+) -> pl.DataFrame:
+    """
+    Pure data manipulation. Takes a raw loaded dataframe and applies 
+    cleansing, filtering, and metadata enrichment.
+    """
+    return (
         df.filter(pl.all_horizontal(pl.all().is_null()).cum_max() == False)
           .filter(~pl.all_horizontal(pl.all().cast(pl.String).str.strip_chars() == ""))
           .with_columns(
@@ -53,7 +34,6 @@ def _process_single_sermsuk_file(
               pl.lit(extracted_date).alias("stock_date")
           )
     )
-    return cleaned_df
 
 def extract_sermsuk_data(
     columns_to_read: list[int],
@@ -64,7 +44,7 @@ def extract_sermsuk_data(
     files: int = 50,
     has_header: bool = False
 ) -> pl.DataFrame:
-    """Orchestrator: Loops through target directory and compiles the final dataframe."""
+    """folder scanning and execution"""
     target_day = day if day is not None else date.today().day
     extracted_date = date.today().replace(day=target_day)
 
@@ -73,20 +53,37 @@ def extract_sermsuk_data(
 
     df_list = []
     
+    
+    schema_overrides = {f"column_{i+1}": pl.String for i in range(len(columns_to_read))}
+
     for index, file in enumerate(sub_folder.iterdir(), start=1):
         if not file.is_file() or not file.name.endswith(".xlsx") or not file.name.startswith("3"):
             continue
             
-        file_df = _process_single_sermsuk_file(
-            file, str(target_day), extracted_date, columns_to_read, 
-            rows_to_read, rows_to_skip, has_header
+        
+        code, region, branch_name = _parse_filename_metadata(file.stem)
+        
+        raw_df = pl.read_excel(
+            file,
+            sheet_name=str(target_day),
+            engine='calamine',
+            columns=columns_to_read,
+            read_options={"n_rows": rows_to_read, "skip_rows": rows_to_skip},
+            drop_empty_cols=False,
+            drop_empty_rows=False,
+            has_header=has_header,
+            schema_overrides=schema_overrides
         )
         
-        df_list.append(file_df)
+        
+        cleaned_df = clean_sermsuk_dataframe(raw_df, code, region, branch_name, extracted_date)
+        
+        df_list.append(cleaned_df)
         print(f"Concatenated file: {file.name}, files in dir: {index}")
 
+    
     if len(df_list) != files:
-        raise SystemError(f"Expected {files} files, found {len(df_list)}. Check folder again.")
+        raise ValueError(f"Expected {files} files, found {len(df_list)}. Check folder again.")
 
     final_df = pl.concat(df_list, how="vertical")
     print(f"{final_df.height} rows extracted")

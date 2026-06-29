@@ -6,9 +6,9 @@ from pathlib import Path
 
 def check_duplicate_dates(existing_df: pl.DataFrame, new_df: pl.DataFrame) -> bool:
     '''
-    helper function to check if data from that day is already in backup
+    helper: check if data from that day is already in backup
     '''
-    existing_dates = existing_df["stock_date"].cast(pl.String)
+    existing_dates = existing_df["stock_date"].cast(pl.String).implode()
     
     has_overlap = new_df.select(
         pl.col("stock_date").cast(pl.String).is_in(existing_dates).any()
@@ -21,7 +21,6 @@ def check_and_load_to_backup(df: pl.DataFrame, csv_file_path: Path) -> None:
     '''
     check if csv backup for that month exists, if no, create file and save data, if yes, append data to the end of existing file. if data with the same date already exists, skip saving data to prevent duplicate data
     '''
-    csv_file_path.parent.mkdir(exist_ok=True)
 
     if not csv_file_path.exists():
         df.write_csv(csv_file_path, separator=",", float_precision=1)
@@ -38,11 +37,11 @@ def check_and_load_to_backup(df: pl.DataFrame, csv_file_path: Path) -> None:
     return None
 
 
-def load_to_excel(output_file: Path, table_name: str, csv_file_path: Path):
+def load_to_excel(df_pl: pl.DataFrame, output_file: Path, table_name: str):
     '''
-    This function uses a package xlwings to interact directly with the excel workbook, mimicking user action of opening the file, finding the right sheet and table, and copy pasting into the raw data sheet. 
+    This function accepts a validated Polars DataFrame, uses a package xlwings to interact directly with the excel workbook, mimicking user action of opening the file, finding the right sheet and table, and copy pasting into the raw data sheet. 
     '''
-    df = pl.read_csv(csv_file_path).to_pandas()
+    df = df_pl.to_pandas()
     
     # Connect to the workbook
     wb = xw.Book(output_file)
