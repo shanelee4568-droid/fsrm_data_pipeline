@@ -59,10 +59,6 @@ class UI:
         print(f"{cls.GREEN}[OK]{cls.RESET} {message}")
 
 
-start_time = time.perf_counter()
-print(f"\n{UI.BOLD}{UI.CYAN}Starting...{UI.RESET}\n")
-
-
 def run_pipeline(steps: list[str] = ["all"]) -> None:
     """
     Initialize all file paths, then run compute steps, followed by saving to a parquet cache, before saving cache to backup csv, reading that updated csv and loading updated data into excel. Each segment broken into arg blocks that can be called by parsing the arg name specified when running the code using --step"
@@ -135,6 +131,7 @@ def run_pipeline(steps: list[str] = ["all"]) -> None:
         cache_file_path.parent.mkdir(exist_ok=True)
         df.write_parquet(cache_file_path)
         UI.step_done("Data extracted and transformed successfully.")
+
 
 
     if "all" in requested_steps or "backup" in requested_steps:
