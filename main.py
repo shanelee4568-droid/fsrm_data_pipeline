@@ -78,7 +78,7 @@ def run_pipeline(steps: list[str] = ["all"]) -> None:
     if not SP_ROOT.exists():
         raise FileNotFoundError(f"SharePoint sync directory not found at: {SP_ROOT}\nEnsure folder is synced.")
 
-    sub_folder = SP_ROOT / SUB_FOLDER_NAME / "1.มิ.ย.2026"
+    sub_folder = SP_ROOT / SUB_FOLDER_NAME 
     output_path = SP_ROOT / FSRM_FOLDER / OUTPUT_FILE
 
     if MONTH is None:
